@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package datumchi.protocol;
+option go_package = "protocol";
+option java_package = "fairx.protocol";
+
+import "common_domain_model.proto";
+
+/**
+ * A set of services for ordering changes to collaborations
+ */
+service OrderingServices {
+
+  /// Called to get the signature of the ordering service
+  rpc CreateCollaboration(Collaboration) returns (CommonResponse) {}
+
+  rpc DeliverCollaboration(Collaboration) returns (CommonResponse) {}
+
+  /// Called to
+  rpc OrderChangeInstruction(CollaborationChangeInstruction) returns (CommonResponse) {}
+
+}

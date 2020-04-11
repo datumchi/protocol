@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package datumchi.protocol;
+option go_package = "protocol";
+option java_package = "datumchi.protocol";
+
+import "common_domain_model.proto";
+
+/// Device Info describes the "Device" role in the DatumChi protocol
+/// TODO: Should DeviceInfo include notification preferences and requirements i.e. GCM, iOS, https push, MESSAGE?
+message DeviceInfo {
+
+  /// The public key of the device, using Ed25519 base 32 encoded
+  string devicePublicKey = 1;
+
+  /// The signature of the sha256 hash of data dependent on call, signed using private key
+  string signature = 2;
+
+}
+
+message EstablishIdentityAuthenticatedRequest {
+  AuthenticationToken authToken = 1;
+  Identity identity = 2;
+}
+
+message AttestIdentityAttributeAuthenticatedRequest {
+  AuthenticationToken authToken = 1;
+  Address identityAddress = 2;
+  Identity.Attestation identityAttestation = 3;
+}
+
+
+/**
+ * A set of services around establishing and maintaining identities, attestations, and etc
+ *
+ */
+service IdentityServices {
+
+  /// Registers a device key with the identity service
+  /// Signature for authentication is the sign(sha256hash(devicePublicKey + identityServiceDomain))
+  rpc RegisterDevice(DeviceInfo) returns (CommonResponse) {}
+
+  /// Get an authentication challenge that a device should use
+  /// No Signature Required
+  rpc AuthenticateGetChallenge(DeviceInfo) returns (CommonResponse) {}
+
+  /// Logs a device in and receives a JWT token in return, for use in other API calls
+  /// Signature for authentication is the sign(sha256hash(devicePublicKey + identityServiceDomain + challenge))
+  rpc AuthenticateDevice(DeviceInfo) returns (AuthenticationToken) {}
+
+  /// Allows an originating node to prove to a receiving node ownership of a NodeKeyPair, and expects the same in return
+  /// Requires the identity to self-attest to each attribute using its key
+  rpc EstablishIdentity(EstablishIdentityAuthenticatedRequest) returns (CommonResponse) {}
+
+  /// Allows an originating device or node to retrieve an identity
+  /// Address of domain but no descriptorReference or descriptorPath gets the Node's Identity
+  rpc GetIdentity(Address) returns (Identity) {}
+
+  /// Attestation of an Identity or Identity Attribute
+  rpc AttestIdentityAttribute(AttestIdentityAttributeAuthenticatedRequest) returns (CommonResponse) {}
+
+  /// Delivers an IdentityMessage where the recipient is housed at this node
+  rpc DeliverMessage(IdentityMessage) returns (CommonResponse) {}
+
+  /// Retrieves any messages waiting for the authenticated device
+  rpc RetrieveMessages(AuthenticationToken) returns (IdentityMessageBundle) {}
+
+}

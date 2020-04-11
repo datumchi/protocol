@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package datumchi.protocol;
+option go_package = "protocol";
+option java_package = "datumchi.protocol";
+
+import "common_domain_model.proto";
+
+
+/**
+ * A set of services around creating, responding to, and managing Collaborations
+ *
+ */
+service CollaborationServices {
+
+  /// Creates a collaboration, originating from this node
+  /// Devices will call a collaboration service's CreateCollaboration service RPC, which will fan out the call to the other nodes listed as participants.
+  rpc CreateCollaboration(Collaboration) returns (CommonResponse) {}
+
+  /// Delivers a collaboration to a node with all signatures and initial Data States signed and accepted by all participants.
+  rpc DeliverCollaboration(Collaboration) returns (CommonResponse) {}
+
+  /// Proposes a data change to a collaboration
+  rpc ProposeCollaborationChangeInstruction(CollaborationChangeInstruction) returns (CommonResponse) {}
+
+  /// Accepts a data change to a collaboration
+  rpc AcceptCollaborationChangeInstruction(CollaborationChangeInstruction) returns (CommonResponse) {}
+
+  /// Commits an ordering message to the collaboration
+  rpc CommitOrderingServiceInstruction(OrderingServiceInstruction) returns (CommonResponse) {}
+
+
+}

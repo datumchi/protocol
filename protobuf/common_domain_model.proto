@@ -1,0 +1,206 @@
+syntax = "proto3";
+
+package datumchi.protocol;
+option go_package = "protocol";
+option java_package = "datumchi.protocol";
+option swift_prefix = "DatumChi";
+
+
+
+/**
+ * Describes a common response typical of any node communication
+ */
+message CommonResponse {
+  bool isOk = 1;
+  string extraInformation = 2;
+}
+
+
+/**
+ * An AuthenticationToken to use for any API calls that require it. A JWT token is an example
+ * of a conforming token.
+ */
+message AuthenticationToken {
+  string header = 1;
+  string payload = 2;
+  string signature = 3;
+}
+
+
+
+/**
+ * Describes a particular node, and is used for transfering keys and other information about nodes between themselves
+ */
+message NodeInfo {
+
+  string nodePublicKey = 1; /// The Ed25519 public key properly encoded for this node (also in DNS TXT record)
+  string nodeDomain = 2; /// The domain of this node i.e. DatumChinode.blah.com (also in DNS SRV record)
+  string signature = 3; /// The signature of the sha256hash of the nodeDomain by the nodePrivateKey, properly enncoded (also in DNS TXT record)
+  string nodeCasualName = 4; /// If the node has a "casual name" it prefers to be known as. Optional.
+
+}
+
+
+/**
+ * Addressing in DatumChi protocol consists of the descriptor, which can be further split into two pieces of application-specific data, and a domain which must hold the required DatumChi protocol SRV and TXT records
+ */
+message Address {
+  string domain = 1; /// The domain of the identity i.e. DatumChinode.example.com
+  string descriptorReference = 2; /// The descriptor reference for the identity i.e. "somethingInHereButNotQuotesNorAsterisks@anythingelsegoes.com"
+  string descriptorPath = 3; /// The descriptor path for the identity i.e. "/optional/path"
+}
+
+/**
+ * An Identity is a set of key/value items that describe a Participant on the network.  Each node defines its own rules for identity, though standard identity attributes are expected in future protocol updates (i.e. "sur_name" being a standard key with some standards around the values)
+ */
+message Identity {
+
+  message Attribute {
+    string name = 1; /// Name of identity attribute i.e. "sur_name"
+    string valueHash = 2; /// The sha256hash of the actual value of the identity attribute, properly encoded
+    string description = 3; /// Given description of the attribute.  If standard, sourced from standard and enforced by node
+  }
+
+  message Attestation {
+    string attributeName = 1; /// Name of identity attribute being attested
+    Address attestor = 2; /// The address of the attestor
+    string attestation = 3; /// The signature of the sha256hash(identityPublicKey+attribute name+attribute value encoded sha256hash)
+  }
+
+  Address address = 1;
+  string identityPublicKey = 2; /// The Ed25519 public key properly encoded for this identity
+  map<string, Attribute> attributes = 3; /// The identity attributes for this identity
+  repeated Attestation attestations = 4; /// Any attestations for this identity
+
+}
+
+/**
+ * An Identity Message is a message that is addressed to a specific identity and is meant to be a pure, encrypted P2P message
+ * passing system
+ */
+message IdentityMessage {
+
+  enum Context {
+    COLLABORATION_CREATED_NEEDS_SIGNATURE = 0;
+    COLLABORATION_UPDATED_NEEDS_SIGNATURE = 1;
+    COLLABORATION_DATA_CHANGE_ORIGINATOR_ERROR = 2; /// If a data change operation results in an error after ordering, inform originator via messaging
+    COLLABORATION_DATA_CHANGE_VALID_EVENT = 3;
+    OTHER = 4;
+  }
+
+  Address sender = 1;
+  Address recipient = 2;
+  bytes content = 3; /// Specified in (TODO: do this spec :) )
+  string sendingNodeSignature = 4;
+
+}
+
+
+/**
+ * A bundle of identity messages delivered all at once to a requesting device
+ */
+message IdentityMessageBundle {
+  repeated IdentityMessage identityMessages = 1;
+}
+
+
+
+/**
+ * A collaboration is a set of data elements representing an application-specific state that are agreed to by the participants of a collaboration.  In general, changes to data contained within the collaboration must be signed off by all participants, which creates a chain of state changes.
+ */
+enum CollaborationOrderingNetwork {
+  DATUMCHI_HEARTBEAT = 0;
+  STELLAR = 1;
+  ETHEREUM = 2;
+}
+
+message ParticipantSignature {
+  Address address = 1;
+  string signature = 2; /// A valid signature = sig(stateHash + previousStateHash), or sig(all participants and observer public keys)
+}
+
+/**
+ * The state for all collaborations is modeled after a trie structure, with permissions
+ * attached to each node on the tree. Permissions are inherited from parent nodes.
+ */
+message CollaborationState {
+
+  message Node {
+    string label = 1; /// The label of this "branch", or "/" for the root node
+    bytes value = 2; /// The valuefor this node. Empty for "/" label
+    repeated Address allowedModifiers = 3; /// If blank, use parent permissions
+    repeated Address requiredModificationSignatories = 4; /// If blank, use parent permissions
+    map<string, bytes> children = 5; /// The children protobuf bytes
+  }
+
+  map<string, bytes> rootChildren = 1; /// The first level of the collaboration state hierarchy
+
+}
+
+/**
+ * A collaboration describes a shared data state along with participants who can observe or participate directly in the shared data state as it evolves.
+ * Each collaboration MUST have an identity created by its originator first, registered with the originator's identity svc of type "collaboration"
+ */
+message Collaboration {
+
+  message OrderingConfiguration {
+    CollaborationOrderingNetwork collaborationOrderingNetwork = 1;
+    string collaborationOrderingAddress = 2; /// heartbeat=DatumChiidentity@address.com (DatumChi HB Orderer) eth=0x8474983792837423 (Collab Smart Contract) or stellar=GU&DDHHDJSKKJSDHKSJHDSKJDHS789d79 (Stellar Account)
+    map<string, string> ordererMetaData = 3; /// This could include, for example, a JWT token an originating service would add in order to use a commercial orderer
+    ParticipantSignature ordererSignature = 4;
+  }
+
+  Identity collaborationIdentity = 1; /// Every collaboration must be associated with an identity controlled by originator of the collaboration
+  Identity originatingParticipant = 2; /// The participant who ORIGINATED the collaboration.
+  repeated Identity nonOriginatingParticipants = 3; /// participants are identities that must sign off on collaboration state changes
+  repeated Identity observingParticipants = 4; /// Observers of a collaboration know about the data changes but do not participate in signing off on data changes
+
+  CollaborationState state = 5; /// The state being agreed to by the participants - Hierarchial data structure
+  OrderingConfiguration orderingConfiguration = 6;
+  repeated ParticipantSignature collaborationOriginationSignatures = 7; /// To be a valid collaboration, it must be signed following the rules
+
+}
+
+
+/**
+ * Data Change Set
+ */
+message CollaborationDataChangeSet {
+
+  enum OperationType {
+    SET = 0;
+    DEL = 1;
+    DELVAL=2;
+  }
+
+  OperationType operationType = 1;
+  repeated string path = 2;
+  string value = 3;
+
+}
+
+/**
+ * Change Instruction
+ * A set of data change sets that describe how the state should change
+ */
+message CollaborationChangeInstruction {
+
+  CollaborationOrderingNetwork collaborationOrderingNetwork = 1;
+  Address collaborationOrderingAddress = 2;
+  Address collaborationAddress = 3; /// Identifies the collaboration being changed
+  repeated CollaborationDataChangeSet collaborationDataChangeSets= 4;
+  repeated ParticipantSignature signatures = 5; /// Must follow the signature rules
+
+}
+
+
+/**
+ * OrderingServiceInstruction
+ * A set of data change sets ordered by an ordering service
+ * It is expected that these data change sets should be executed in the order specified in this message
+ */
+message OrderingServiceInstruction {
+  Address collaborationAddress = 1;
+  repeated CollaborationChangeInstruction collaborationChangeInstructions = 2;
+  repeated ParticipantSignature orderingServiceSignatures = 3;
+}
