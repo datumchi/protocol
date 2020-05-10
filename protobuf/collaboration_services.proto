@@ -26,7 +26,7 @@ service CollaborationServices {
   /// Accepts a data change to a collaboration
   rpc AcceptCollaborationChangeInstruction(CollaborationChangeInstruction) returns (CommonResponse) {}
 
-  /// Commits an ordering message to the collaboration
+  /// Commits an ordering message to the collaboration from an ordering service or from the originating collaboration service
   rpc CommitOrderingServiceInstruction(OrderingServiceInstruction) returns (CommonResponse) {}
 
 
